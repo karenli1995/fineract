@@ -180,7 +180,6 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
 
     @Override
     public Page<SavingsAccountData> retrieveAll(final SearchParameters searchParameters) {
-
         final AppUser currentUser = this.context.authenticatedUser();
         final String hierarchy = currentUser.getOffice().getHierarchy();
         final String hierarchySearchString = hierarchy + "%";
@@ -188,13 +187,11 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
         final StringBuilder sqlBuilder = new StringBuilder(200);
         sqlBuilder.append("select " + sqlGenerator.calcFoundRows() + " ");
         sqlBuilder.append(this.savingAccountMapper.schema());
-
         sqlBuilder.append(" join m_office o on o.id = c.office_id");
         sqlBuilder.append(" where o.hierarchy like ?");
 
-        final Object[] objectArray = new Object[2];
-        objectArray[0] = hierarchySearchString;
-        int arrayPos = 1;
+        final List<Object> objectList = new ArrayList<>();
+        objectList.add(hierarchySearchString);
         if (searchParameters != null) {
             String sqlQueryCriteria = searchParameters.getSqlSearch();
             if (StringUtils.isNotBlank(sqlQueryCriteria)) {
@@ -205,13 +202,17 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
 
             if (StringUtils.isNotBlank(searchParameters.getExternalId())) {
                 sqlBuilder.append(" and sa.external_id = ?");
-                objectArray[arrayPos] = searchParameters.getExternalId();
-                arrayPos = arrayPos + 1;
+                objectList.add(searchParameters.getExternalId());
             }
             if (searchParameters.getOfficeId() != null) {
                 sqlBuilder.append("and c.office_id =?");
-                objectArray[arrayPos] = searchParameters.getOfficeId();
-                arrayPos = arrayPos + 1;
+                objectList.add(searchParameters.getOfficeId());
+            }
+            // Add birthday filter
+            if (searchParameters.getBirthdayMonth() != null && searchParameters.getBirthdayDay() != null) {
+                sqlBuilder.append(" and MONTH(c.date_of_birth) = ? and DAY(c.date_of_birth) = ?");
+                objectList.add(searchParameters.getBirthdayMonth());
+                objectList.add(searchParameters.getBirthdayDay());
             }
             if (searchParameters.isOrderByRequested()) {
                 sqlBuilder.append(" order by ").append(searchParameters.getOrderBy());
@@ -232,7 +233,7 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
                 }
             }
         }
-        final Object[] finalObjectArray = Arrays.copyOf(objectArray, arrayPos);
+        final Object[] finalObjectArray = objectList.toArray();
         return this.paginationHelper.fetchPage(this.jdbcTemplate, sqlBuilder.toString(), finalObjectArray, this.savingAccountMapper);
     }
 
@@ -1060,6 +1061,8 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
                 taxGroupData = TaxGroupData.lookup(taxGroupId, taxGroupName);
             }
 
+            LocalDate clientBirthday = JdbcSupport.getLocalDate(rs, "date_of_birth");
+
             return SavingsAccountData.instance(id, accountNo, depositType, externalId, groupId, groupName, clientId, clientName, productId,
                     productName, fieldOfficerId, fieldOfficerName, status, subStatus, reasonForBlock, timeline, currency,
                     nominalAnnualInterestRate, interestCompoundingPeriodType, interestPostingPeriodType, interestCalculationType,
@@ -1067,7 +1070,7 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
                     withdrawalFeeForTransfers, summary, allowOverdraft, overdraftLimit, minRequiredBalance, enforceMinRequiredBalance,
                     maxAllowedLienLimit, lienAllowed, minBalanceForInterestCalculation, onHoldFunds, nominalAnnualInterestRateOverdraft,
                     minOverdraftForInterestCalculation, withHoldTax, taxGroupData, lastActiveTransactionDate, isDormancyTrackingActive,
-                    daysToInactive, daysToDormancy, daysToEscheat, onHoldAmount);
+                    daysToInactive, daysToDormancy, daysToEscheat, onHoldAmount, clientBirthday);
         }
     }
 

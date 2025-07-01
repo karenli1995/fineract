@@ -124,15 +124,16 @@ public class SavingsAccountsApiResource {
     public String retrieveAll(@Context final UriInfo uriInfo,
             @QueryParam("sqlSearch") @Parameter(description = "sqlSearch") final String sqlSearch,
             @QueryParam("externalId") @Parameter(description = "externalId") final String externalId,
-            // @QueryParam("underHierarchy") final String hierarchy,
             @QueryParam("offset") @Parameter(description = "offset") final Integer offset,
             @QueryParam("limit") @Parameter(description = "limit") final Integer limit,
             @QueryParam("orderBy") @Parameter(description = "orderBy") final String orderBy,
-            @QueryParam("sortOrder") @Parameter(description = "sortOrder") final String sortOrder) {
+            @QueryParam("sortOrder") @Parameter(description = "sortOrder") final String sortOrder,
+            @QueryParam("birthdayMonth") @Parameter(description = "birthdayMonth", example = "12") final Integer birthdayMonth,
+            @QueryParam("birthdayDay") @Parameter(description = "birthdayDay", example = "8") final Integer birthdayDay) {
 
         context.authenticatedUser().validateHasReadPermission(SavingsApiConstants.SAVINGS_ACCOUNT_RESOURCE_NAME);
 
-        final SearchParameters searchParameters = SearchParameters.forSavings(sqlSearch, externalId, offset, limit, orderBy, sortOrder);
+        final SearchParameters searchParameters = SearchParameters.forSavings(sqlSearch, externalId, offset, limit, orderBy, sortOrder, birthdayMonth, birthdayDay);
 
         final Page<SavingsAccountData> products = savingsAccountReadPlatformService.retrieveAll(searchParameters);
 

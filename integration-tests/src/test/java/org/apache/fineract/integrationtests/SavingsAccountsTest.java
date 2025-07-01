@@ -20,6 +20,7 @@ package org.apache.fineract.integrationtests;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.HashMap;
 import org.apache.fineract.client.models.PostSavingsAccountsAccountIdRequest;
 import org.apache.fineract.client.models.PostSavingsAccountsAccountIdResponse;
 import org.apache.fineract.client.models.PostSavingsAccountsRequest;
@@ -92,6 +93,68 @@ public class SavingsAccountsTest extends IntegrationTest {
 
         assertThat(response.isSuccessful()).isTrue();
         assertThat(response.body()).isNotNull();
+    }
+
+    @Test
+    @Order(4)
+    void filterSavingsAccountsByBirthday() throws Exception {
+        // Step 1: Create a client with birthday December 8
+        String birthday = "08 December 1990";
+        String dateFormat = "dd MMMM yyyy";
+        String locale = "en";
+        // Build client JSON with dateOfBirth
+        org.apache.fineract.integrationtests.common.ClientHelper clientHelper = new org.apache.fineract.integrationtests.common.ClientHelper(requestSpec, responseSpec);
+        HashMap<String, Object> clientMap = org.apache.fineract.integrationtests.common.ClientHelper.setInitialClientValues("1", 1);
+        clientMap.put("active", "true");
+        clientMap.put("activationDate", birthday);
+        clientMap.put("dateOfBirth", birthday);
+        clientMap.put("dateFormat", dateFormat);
+        clientMap.put("locale", locale);
+        String clientJson = new com.google.gson.Gson().toJson(clientMap);
+        Integer clientId = org.apache.fineract.integrationtests.common.ClientHelper.createClient(requestSpec, responseSpec, clientJson);
+        org.apache.fineract.integrationtests.common.ClientHelper.verifyClientCreatedOnServer(requestSpec, responseSpec, clientId);
+
+        // Step 2: Create a savings account for that client
+        PostSavingsAccountsRequest request = new PostSavingsAccountsRequest();
+        request.setClientId(clientId.longValue());
+        request.setProductId(1L); // Assumes product 1 exists
+        request.setLocale(locale);
+        request.setDateFormat(dateFormat);
+        request.submittedOnDate(birthday);
+        Response<PostSavingsAccountsResponse> response = okR(fineract().savingsAccounts.submitApplication2(request));
+        assertThat(response.isSuccessful()).isTrue();
+        assertThat(response.body()).isNotNull();
+        Long savingsId = response.body().getSavingsId();
+
+        // Step 3: Query /savingsaccounts?birthdayMonth=12&birthdayDay=8
+        retrofit2.Response<org.apache.fineract.client.models.GetSavingsAccountsResponse> filterResponse =
+            okR(fineract().savingsAccounts.retrieveAll(null, null, null, null, null, null, 12, 8));
+        assertThat(filterResponse.isSuccessful()).isTrue();
+        assertThat(filterResponse.body()).isNotNull();
+        boolean found = filterResponse.body().getPageItems().stream()
+            .anyMatch(acc -> acc.getId().equals(savingsId));
+        assertThat(found).isTrue();
+
+        // Step 4: Create a client with a different birthday and savings account, ensure not returned
+        String otherBirthday = "09 December 1990";
+        clientMap.put("dateOfBirth", otherBirthday);
+        clientMap.put("activationDate", otherBirthday);
+        clientJson = new com.google.gson.Gson().toJson(clientMap);
+        Integer otherClientId = org.apache.fineract.integrationtests.common.ClientHelper.createClient(requestSpec, responseSpec, clientJson);
+        org.apache.fineract.integrationtests.common.ClientHelper.verifyClientCreatedOnServer(requestSpec, responseSpec, otherClientId);
+        request.setClientId(otherClientId.longValue());
+        request.submittedOnDate(otherBirthday);
+        Response<PostSavingsAccountsResponse> otherResponse = okR(fineract().savingsAccounts.submitApplication2(request));
+        assertThat(otherResponse.isSuccessful()).isTrue();
+        assertThat(otherResponse.body()).isNotNull();
+        Long otherSavingsId = otherResponse.body().getSavingsId();
+        // Query again
+        filterResponse = okR(fineract().savingsAccounts.retrieveAll(null, null, null, null, null, null, 12, 8));
+        assertThat(filterResponse.isSuccessful()).isTrue();
+        assertThat(filterResponse.body()).isNotNull();
+        boolean otherFound = filterResponse.body().getPageItems().stream()
+            .anyMatch(acc -> acc.getId().equals(otherSavingsId));
+        assertThat(otherFound).isFalse();
     }
 
 }
